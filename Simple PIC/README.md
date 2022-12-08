@@ -1,3 +1,3 @@
-# PlasmaPhysics
+# Simple PIC
 
 TODO
