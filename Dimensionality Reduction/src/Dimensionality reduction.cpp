@@ -20,42 +20,42 @@ void TestCase1()
     double hx = grid.LX / grid.nCellsX;
     double hy = grid.LY / grid.nCellsY;
 
-    // Setting the boundary conditions in the cell centers
+    // Setting the boundary conditions in the nodes
     BCTypes bcTypes;
     bcTypes.alongX = BCType::Dirichlet;
     bcTypes.alongY = BCType::Dirichlet;
 
     BoundaryConditions bc;
 
-    bc.left = vector<double>(grid.nCellsY);
-    bc.right = vector<double>(grid.nCellsY);
-    for (int i = 0; i < grid.nCellsY; i++)
+    bc.left = vector<double>(grid.nCellsY + 1);
+    bc.right = vector<double>(grid.nCellsY + 1);
+    for (int i = 0; i < grid.nCellsY + 1; i++)
     {
-        double y = hy * (i + 0.5);
+        double y = hy * i;
 
         bc.left[i] = sin(pi * y);
         bc.right[i] = exp(pi * grid.LX) * sin(pi * y) + 0.5 * y * y;
     }
 
-    bc.bottom = vector<double>(grid.nCellsX);
-    bc.top = vector<double>(grid.nCellsX);
-    for (int i = 0; i < grid.nCellsX; i++)
+    bc.bottom = vector<double>(grid.nCellsX + 1);
+    bc.top = vector<double>(grid.nCellsX + 1);
+    for (int i = 0; i < grid.nCellsX + 1; i++)
     {
-        double x = hx * (i + 0.5);
+        double x = hx * i;
 
         bc.bottom[i] = 0;
         bc.top[i] = 0.5 * x * x;
     }
 
-    // Setting the RHS in the cell centers
-    vector<double> rhsUnfolded(grid.nCellsX * grid.nCellsY);
-    for (int j = 0; j < grid.nCellsY; j++)
+    // Setting the RHS in the nodes
+    vector<double> rhsUnfolded((grid.nCellsX + 1) * (grid.nCellsY + 1));
+    for (int j = 0; j < grid.nCellsY + 1; j++)
     {
-        for (int i = 0; i < grid.nCellsX; i++)
+        for (int i = 0; i < grid.nCellsX + 1; i++)
         {
-            double x = hx * (i + 0.5);
-            double y = hy * (j + 0.5);
-            int ind = i + j * grid.nCellsX;
+            double x = hx * i;
+            double y = hy * j;
+            int ind = i + j * (grid.nCellsX + 1);
 
             rhsUnfolded[ind] = x * x + y * y;
         }
@@ -69,14 +69,14 @@ void TestCase1()
     std::ofstream output;
     output.open("output (case 1).txt");
 
-    for (int j = 0; j < grid.nCellsY; j++)
+    for (int j = 0; j < grid.nCellsY + 1; j++)
     {
 
-        for (int i = 0; i < grid.nCellsX; i++)
+        for (int i = 0; i < grid.nCellsX + 1; i++)
         {
-            double x = hx * (i + 0.5);
-            double y = hy * (j + 0.5);
-            int ind = i + j * grid.nCellsX;
+            double x = hx * i;
+            double y = hy * j;
+            int ind = i + j * (grid.nCellsX + 1);
 
             output << x << " " << y << " " << solutionUnfolded[ind] << endl;
         }
@@ -98,26 +98,25 @@ void TestCase2()
     double hx = grid.LX / grid.nCellsX;
     double hy = grid.LY / grid.nCellsY;
 
-    // Setting the boundary conditions in the cell centers
+    // Setting the boundary conditions in the nodes
     BCTypes bcTypes;
     bcTypes.alongX = BCType::Dirichlet;
     bcTypes.alongY = BCType::Periodic;
 
     BoundaryConditions bc;
 
-    bc.left = vector<double>(grid.nCellsY, 0);
-    bc.right = vector<double>(grid.nCellsY, 0);
+    bc.left = vector<double>(grid.nCellsY + 1, 0);
+    bc.right = vector<double>(grid.nCellsY + 1, 0);
 
-    // Setting the charge density in the cell centers
-    vector<double> rhsUnfolded(grid.nCellsX * grid.nCellsY);
-    for (int j = 0; j < grid.nCellsY; j++)
+    // Setting the charge density in the nodes
+    vector<double> rhsUnfolded((grid.nCellsX + 1) * (grid.nCellsY + 1));
+    for (int j = 0; j < grid.nCellsY + 1; j++)
     {
-
-        for (int i = 0; i < grid.nCellsX; i++)
+        for (int i = 0; i < grid.nCellsX + 1; i++)
         {
-            double x = hx * (i + 0.5);
-            double y = hy * (j + 0.5);
-            int ind = i + j * grid.nCellsX;
+            double x = hx * i;
+            double y = hy * j;
+            int ind = i + j * (grid.nCellsX + 1);
 
             rhsUnfolded[ind] = y * sin(5 * pi * x) + exp(-((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5)) / 0.02);
         }
@@ -131,14 +130,14 @@ void TestCase2()
     std::ofstream output;
     output.open("output (case 2).txt");
 
-    for (int j = 0; j < grid.nCellsY; j++)
+    for (int j = 0; j < grid.nCellsY + 1; j++)
     {
 
-        for (int i = 0; i < grid.nCellsX; i++)
+        for (int i = 0; i < grid.nCellsX + 1; i++)
         {
-            double x = hx * (i + 0.5);
-            double y = hy * (j + 0.5);
-            int ind = i + j * grid.nCellsX;
+            double x = hx * i;
+            double y = hy * j;
+            int ind = i + j * (grid.nCellsX + 1);
 
             output << x << " " << y << " " << solutionUnfolded[ind] << endl;
         }
@@ -160,42 +159,42 @@ void TestCase3()
     double hx = grid.LX / grid.nCellsX;
     double hy = grid.LY / grid.nCellsY;
 
-    // Setting the boundary conditions in the cell centers
+    // Setting the boundary conditions in the nodes
     BCTypes bcTypes;
     bcTypes.alongX = BCType::Dirichlet;
     bcTypes.alongY = BCType::Dirichlet;
 
     BoundaryConditions bc;
 
-    bc.left = vector<double>(grid.nCellsY);
-    bc.right = vector<double>(grid.nCellsY);
-    for (int i = 0; i < grid.nCellsY; i++)
+    bc.left = vector<double>(grid.nCellsY + 1);
+    bc.right = vector<double>(grid.nCellsY + 1);
+    for (int i = 0; i < grid.nCellsY + 1; i++)
     {
-        double y = hy * (i + 0.5);
+        double y = hy * i;
 
         bc.left[i] = sin(3 * pi * y);
         bc.right[i] = sin(5 * pi + 3 * pi * y);
     }
 
-    bc.bottom = vector<double>(grid.nCellsX);
-    bc.top = vector<double>(grid.nCellsX);
-    for (int i = 0; i < grid.nCellsX; i++)
+    bc.bottom = vector<double>(grid.nCellsX + 1);
+    bc.top = vector<double>(grid.nCellsX + 1);
+    for (int i = 0; i < grid.nCellsX + 1; i++)
     {
-        double x = hx * (i + 0.5);
+        double x = hx * i;
 
         bc.bottom[i] = sin(5 * pi * x);
         bc.top[i] = sin(5 * pi * x + 3 * pi);
     }
 
-    // Setting the charge density in the cell centers
-    vector<double> rhsUnfolded(grid.nCellsX * grid.nCellsY);
-    for (int j = 0; j < grid.nCellsY; j++)
+    // Setting the charge density in the nodes
+    vector<double> rhsUnfolded((grid.nCellsX + 1) * (grid.nCellsY + 1));
+    for (int j = 0; j < grid.nCellsY + 1; j++)
     {
-        for (int i = 0; i < grid.nCellsX; i++)
+        for (int i = 0; i < grid.nCellsX + 1; i++)
         {
-            double x = hx * (i + 0.5);
-            double y = hy * (j + 0.5);
-            int ind = i + j * grid.nCellsX;
+            double x = hx * i;
+            double y = hy * j;
+            int ind = i + j * (grid.nCellsX + 1);
 
             rhsUnfolded[ind] = -34 * pi * pi * sin(5 * pi * x + 3 * pi * y);
         }
@@ -209,14 +208,14 @@ void TestCase3()
     std::ofstream output;
     output.open("output (case 3).txt");
 
-    for (int j = 0; j < grid.nCellsY; j++)
+    for (int j = 0; j < grid.nCellsY + 1; j++)
     {
 
-        for (int i = 0; i < grid.nCellsX; i++)
+        for (int i = 0; i < grid.nCellsX + 1; i++)
         {
-            double x = hx * (i + 0.5);
-            double y = hy * (j + 0.5);
-            int ind = i + j * grid.nCellsX;
+            double x = hx * i;
+            double y = hy * j;
+            int ind = i + j * (grid.nCellsX + 1);
 
             output << x << " " << y << " " << solutionUnfolded[ind] << endl;
         }
