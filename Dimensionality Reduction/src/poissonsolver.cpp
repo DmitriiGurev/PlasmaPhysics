@@ -1,9 +1,10 @@
 #include "poissonsolver.h"
 
 #include <stdexcept>
+#include <iostream>
 
 PoissonSolver::PoissonSolver(UniformGrid grid, BCTypes bcTypes, BoundaryConditions bc) :
-	_grid(grid), _bcTypes(bcTypes), _bc(bc)
+	_grid(grid), _bcTypes(bcTypes)
 {
     // Check the validity of arguments
     bool validGrid = grid.LX > 0 &&
@@ -25,10 +26,10 @@ PoissonSolver::PoissonSolver(UniformGrid grid, BCTypes bcTypes, BoundaryConditio
         throw std::invalid_argument("Missing boundary condition types.");
 
     bool validBCX = !((bcTypes.alongX == BCType::Dirichlet) &&
-        !(bc.left.size() == _grid.nCellsY && bc.right.size() == _grid.nCellsY));
+        !(bc.left.size() == _grid.nCellsY + 1 && bc.right.size() == _grid.nCellsY + 1));
 
     bool validBCY = !((bcTypes.alongY == BCType::Dirichlet) &&
-        !(bc.bottom.size() == _grid.nCellsX && bc.top.size() == _grid.nCellsX));
+        !(bc.bottom.size() == _grid.nCellsX + 1 && bc.top.size() == _grid.nCellsX + 1));
 
     if (!validBCX || !validBCY)
         throw std::invalid_argument("Invalid size of the boundary condition vectors.");
@@ -56,6 +57,29 @@ PoissonSolver::PoissonSolver(UniformGrid grid, BCTypes bcTypes, BoundaryConditio
     if (bcTypes.alongX == BCType::Periodic && 
         bcTypes.alongY == BCType::Periodic)
         _nEq = grid.nRegsX * grid.nRegsY * (_nx + _ny);
+
+    // BC from the nodes to the centers
+    if (bcTypes.alongX == BCType::Dirichlet)
+    {
+        _bc.left = std::vector<double>(grid.nCellsY);
+        for (int i = 0; i < grid.nCellsY; i++)
+            _bc.left[i] = 0.5 * (bc.left[i] + bc.left[i + 1]);
+        
+        _bc.right = std::vector<double>(grid.nCellsY);
+        for (int i = 0; i < grid.nCellsY; i++)
+            _bc.right[i] = 0.5 * (bc.right[i] + bc.right[i + 1]);
+    }
+
+    if (bcTypes.alongY == BCType::Dirichlet)
+    {
+        _bc.bottom = std::vector<double>(grid.nCellsX);
+        for (int i = 0; i < grid.nCellsX; i++)
+            _bc.bottom[i] = 0.5 * (bc.bottom[i] + bc.bottom[i + 1]);
+
+        _bc.top = std::vector<double>(grid.nCellsX);
+        for (int i = 0; i < grid.nCellsX; i++)
+            _bc.top[i] = 0.5 * (bc.top[i] + bc.top[i + 1]);
+    }
 
     // Assemble the system
     Assemble();
@@ -526,8 +550,21 @@ void PoissonSolver::Assemble()
 
 std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
 {
-    if (rhsUnfolded.size() != _grid.nCellsX * _grid.nCellsY)
+    if (rhsUnfolded.size() != (_grid.nCellsX + 1) * (_grid.nCellsY + 1))
         throw std::invalid_argument("Invalid size of the RHS vector.");
+
+    std::vector<double> rhsUnfoldedC(_grid.nCellsX * _grid.nCellsY);
+    for (int j = 0; j < _grid.nCellsY; j++)
+    {
+        for (int i = 0; i < _grid.nCellsX; i++)
+        {
+            rhsUnfoldedC[i + _grid.nCellsX * j] = 0.25 *
+                (rhsUnfolded[i + (_grid.nCellsX + 1) * j] +
+                    rhsUnfolded[i + 1 + (_grid.nCellsX + 1) * j] +
+                    rhsUnfolded[i + (_grid.nCellsX + 1) * (j + 1)] +
+                    rhsUnfolded[i + 1 + (_grid.nCellsX + 1) * (j + 1)]);
+        }
+    }
 
     Eigen::VectorXd RHS = _rhs;
 
@@ -548,14 +585,14 @@ std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
             for (int i = 0; i < ny; i++)
             {
                 int ind = (m * nx + cell) + _grid.nCellsX * (n * ny + i);
-                RHS(l) += rhsUnfolded[ind] * hy;
+                RHS(l) += rhsUnfoldedC[ind] * hy;
             }
             break;
         case Flag::Y:
             for (int j = 0; j < nx; j++)
             {
                 int ind = (m * nx + j) + _grid.nCellsX * (n * ny + cell);
-                RHS(l) += rhsUnfolded[ind] * hx;
+                RHS(l) += rhsUnfoldedC[ind] * hx;
             }
             break;
         }
@@ -603,5 +640,41 @@ std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
             }
         }
     }
-    return solutionUnfolded;
+
+    std::vector<double> solutionUnfoldedN((_grid.nCellsX + 1) * (_grid.nCellsY + 1));
+    solutionUnfoldedN[0] = solutionUnfolded[0];
+    solutionUnfoldedN[_grid.nCellsX] = solutionUnfolded[_grid.nCellsX - 1];
+    solutionUnfoldedN[(_grid.nCellsX + 1) * _grid.nCellsY] = solutionUnfolded[_grid.nCellsX * (_grid.nCellsY - 1)];
+    solutionUnfoldedN[(_grid.nCellsX + 1) * (_grid.nCellsY + 1) - 1] = solutionUnfolded[_grid.nCellsX * _grid.nCellsY - 1];
+
+    for (int i = 1; i < _grid.nCellsX; i++)
+        solutionUnfoldedN[i] = 0.5 * 
+        (solutionUnfolded[i - 1] + 
+            solutionUnfolded[i]);
+    for (int i = 1; i < _grid.nCellsX; i++)
+        solutionUnfoldedN[i + (_grid.nCellsX + 1) * _grid.nCellsY] = 0.5 * 
+        (solutionUnfolded[i - 1 + _grid.nCellsX * (_grid.nCellsY - 1)] + 
+            solutionUnfolded[i + _grid.nCellsX * (_grid.nCellsY - 1)]);
+    for (int i = 1; i < _grid.nCellsY; i++)
+        solutionUnfoldedN[(_grid.nCellsX + 1) * i] = 0.5 * 
+        (solutionUnfolded[_grid.nCellsX * (i - 1)] +
+            solutionUnfolded[_grid.nCellsX * i]);
+    for (int i = 1; i < _grid.nCellsY; i++)
+        solutionUnfoldedN[_grid.nCellsX + (_grid.nCellsX + 1) * i] = 0.5 *
+        (solutionUnfolded[_grid.nCellsX - 1 + _grid.nCellsX * (i - 1)] +
+            solutionUnfolded[_grid.nCellsX - 1 + _grid.nCellsX * i]);
+
+    for (int i = 1; i < _grid.nCellsX; i++)
+    {
+        for (int j = 1; j < _grid.nCellsY; j++)
+        {
+            solutionUnfoldedN[i + (_grid.nCellsX + 1) * j] = 0.25 *
+                (solutionUnfolded[i - 1 + _grid.nCellsX * (j - 1)] +
+                    solutionUnfolded[i + _grid.nCellsX * (j - 1)] +
+                    solutionUnfolded[i - 1 + _grid.nCellsX * j] +
+                    solutionUnfolded[i + _grid.nCellsX * j]);
+        }
+    }
+
+    return solutionUnfoldedN;
 }
