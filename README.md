@@ -1,3 +1,3 @@
 # PlasmaPhysics
 
-TODO
+Collection of codes in C++ for solving plasma physics problems.
