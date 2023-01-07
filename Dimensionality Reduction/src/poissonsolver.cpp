@@ -83,6 +83,12 @@ PoissonSolver::PoissonSolver(UniformGrid grid, BCTypes bcTypes, BoundaryConditio
 
     // Assemble the system
     Assemble();
+
+    // Allocate the memory
+    _rhsUnfoldedC = std::vector<double>(_grid.nCellsX * _grid.nCellsY);
+    _solution = Eigen::VectorXd(_nEq);
+    _solutionUnfolded = std::vector<double>(_grid.nCellsX * _grid.nCellsY);
+    _solutionUnfoldedN = std::vector<double>((_grid.nCellsX + 1) * (_grid.nCellsY + 1));
 }
 
 int PoissonSolver::Pos(int m, int n, Flag flag, int cell)
@@ -550,15 +556,14 @@ void PoissonSolver::Assemble()
 
 std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
 {
-    if (rhsUnfolded.size() != (_grid.nCellsX + 1) * (_grid.nCellsY + 1))
+     if (rhsUnfolded.size() != (_grid.nCellsX + 1) * (_grid.nCellsY + 1))
         throw std::invalid_argument("Invalid size of the RHS vector.");
 
-    std::vector<double> rhsUnfoldedC(_grid.nCellsX * _grid.nCellsY);
     for (int j = 0; j < _grid.nCellsY; j++)
     {
         for (int i = 0; i < _grid.nCellsX; i++)
         {
-            rhsUnfoldedC[i + _grid.nCellsX * j] = 0.25 *
+            _rhsUnfoldedC[i + _grid.nCellsX * j] = 0.25 *
                 (rhsUnfolded[i + (_grid.nCellsX + 1) * j] +
                     rhsUnfolded[i + 1 + (_grid.nCellsX + 1) * j] +
                     rhsUnfolded[i + (_grid.nCellsX + 1) * (j + 1)] +
@@ -566,7 +571,7 @@ std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
         }
     }
 
-    Eigen::VectorXd RHS = _rhs;
+    _RHS = _rhs;
 
     int nx = _nx;
     int ny = _ny;
@@ -585,14 +590,14 @@ std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
             for (int i = 0; i < ny; i++)
             {
                 int ind = (m * nx + cell) + _grid.nCellsX * (n * ny + i);
-                RHS(l) += rhsUnfoldedC[ind] * hy;
+                RHS(l) += _rhsUnfoldedC[ind] * hy;
             }
             break;
         case Flag::Y:
             for (int j = 0; j < nx; j++)
             {
                 int ind = (m * nx + j) + _grid.nCellsX * (n * ny + cell);
-                RHS(l) += rhsUnfoldedC[ind] * hx;
+                RHS(l) += _rhsUnfoldedC[ind] * hx;
             }
             break;
         }
@@ -608,23 +613,19 @@ std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
             for (int j = 0; j < nx; j++)
             {
                 l++;
-                rhs(l, m, n, j, Flag::X, RHS);
+                rhs(l, m, n, j, Flag::X, _RHS);
             }
 
             // A = Y, B = X
             for (int i = 0; i < ny; i++)
             {
                 l++;
-                rhs(l, m, n, i, Flag::Y, RHS);
+                rhs(l, m, n, i, Flag::Y, _RHS);
             }
         }
     }
 
-    Eigen::VectorXd solution(_nEq);
-
-    solution = _solver.solve(RHS);
-
-    std::vector<double> solutionUnfolded(_grid.nCellsX * _grid.nCellsY);
+    _solution = _solver.solve(_RHS);
 
     for (int n = 0; n < _grid.nRegsY; n++)
     {
@@ -635,46 +636,45 @@ std::vector<double> PoissonSolver::Solve(std::vector<double> rhsUnfolded)
                 for (int j = 0; j < nx; j++)
                 {
                     int ind = (m * nx + j) + _grid.nCellsX * (n * ny + i);
-                    solutionUnfolded[ind] = solution(Pos(m, n, Flag::X, j)) + solution(Pos(m, n, Flag::Y, i));
+                    _solutionUnfolded[ind] = _solution(Pos(m, n, Flag::X, j)) + _solution(Pos(m, n, Flag::Y, i));
                 }
             }
         }
     }
 
-    std::vector<double> solutionUnfoldedN((_grid.nCellsX + 1) * (_grid.nCellsY + 1));
-    solutionUnfoldedN[0] = solutionUnfolded[0];
-    solutionUnfoldedN[_grid.nCellsX] = solutionUnfolded[_grid.nCellsX - 1];
-    solutionUnfoldedN[(_grid.nCellsX + 1) * _grid.nCellsY] = solutionUnfolded[_grid.nCellsX * (_grid.nCellsY - 1)];
-    solutionUnfoldedN[(_grid.nCellsX + 1) * (_grid.nCellsY + 1) - 1] = solutionUnfolded[_grid.nCellsX * _grid.nCellsY - 1];
+    _solutionUnfoldedN[0] = _solutionUnfolded[0];
+    _solutionUnfoldedN[_grid.nCellsX] = _solutionUnfolded[_grid.nCellsX - 1];
+    _solutionUnfoldedN[(_grid.nCellsX + 1) * _grid.nCellsY] = _solutionUnfolded[_grid.nCellsX * (_grid.nCellsY - 1)];
+    _solutionUnfoldedN[(_grid.nCellsX + 1) * (_grid.nCellsY + 1) - 1] = _solutionUnfolded[_grid.nCellsX * _grid.nCellsY - 1];
 
     for (int i = 1; i < _grid.nCellsX; i++)
-        solutionUnfoldedN[i] = 0.5 * 
-        (solutionUnfolded[i - 1] + 
-            solutionUnfolded[i]);
+        _solutionUnfoldedN[i] = 0.5 * 
+        (_solutionUnfolded[i - 1] + 
+            _solutionUnfolded[i]);
     for (int i = 1; i < _grid.nCellsX; i++)
-        solutionUnfoldedN[i + (_grid.nCellsX + 1) * _grid.nCellsY] = 0.5 * 
-        (solutionUnfolded[i - 1 + _grid.nCellsX * (_grid.nCellsY - 1)] + 
-            solutionUnfolded[i + _grid.nCellsX * (_grid.nCellsY - 1)]);
+        _solutionUnfoldedN[i + (_grid.nCellsX + 1) * _grid.nCellsY] = 0.5 * 
+        (_solutionUnfolded[i - 1 + _grid.nCellsX * (_grid.nCellsY - 1)] + 
+            _solutionUnfolded[i + _grid.nCellsX * (_grid.nCellsY - 1)]);
     for (int i = 1; i < _grid.nCellsY; i++)
-        solutionUnfoldedN[(_grid.nCellsX + 1) * i] = 0.5 * 
-        (solutionUnfolded[_grid.nCellsX * (i - 1)] +
-            solutionUnfolded[_grid.nCellsX * i]);
+        _solutionUnfoldedN[(_grid.nCellsX + 1) * i] = 0.5 * 
+        (_solutionUnfolded[_grid.nCellsX * (i - 1)] +
+            _solutionUnfolded[_grid.nCellsX * i]);
     for (int i = 1; i < _grid.nCellsY; i++)
-        solutionUnfoldedN[_grid.nCellsX + (_grid.nCellsX + 1) * i] = 0.5 *
-        (solutionUnfolded[_grid.nCellsX - 1 + _grid.nCellsX * (i - 1)] +
-            solutionUnfolded[_grid.nCellsX - 1 + _grid.nCellsX * i]);
+        _solutionUnfoldedN[_grid.nCellsX + (_grid.nCellsX + 1) * i] = 0.5 *
+        (_solutionUnfolded[_grid.nCellsX - 1 + _grid.nCellsX * (i - 1)] +
+            _solutionUnfolded[_grid.nCellsX - 1 + _grid.nCellsX * i]);
 
     for (int i = 1; i < _grid.nCellsX; i++)
     {
         for (int j = 1; j < _grid.nCellsY; j++)
         {
-            solutionUnfoldedN[i + (_grid.nCellsX + 1) * j] = 0.25 *
-                (solutionUnfolded[i - 1 + _grid.nCellsX * (j - 1)] +
-                    solutionUnfolded[i + _grid.nCellsX * (j - 1)] +
-                    solutionUnfolded[i - 1 + _grid.nCellsX * j] +
-                    solutionUnfolded[i + _grid.nCellsX * j]);
+            _solutionUnfoldedN[i + (_grid.nCellsX + 1) * j] = 0.25 *
+                (_solutionUnfolded[i - 1 + _grid.nCellsX * (j - 1)] +
+                    _solutionUnfolded[i + _grid.nCellsX * (j - 1)] +
+                    _solutionUnfolded[i - 1 + _grid.nCellsX * j] +
+                    _solutionUnfolded[i + _grid.nCellsX * j]);
         }
     }
 
-    return solutionUnfoldedN;
+    return _solutionUnfoldedN;
 }

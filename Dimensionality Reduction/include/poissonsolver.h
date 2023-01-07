@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include <Eigen/Sparse>
+#include <eigen-3.4.0/Eigen/Sparse>
 
 typedef Eigen::SparseMatrix<double> SpMat;
 typedef Eigen::Triplet<double> T;
@@ -68,4 +68,11 @@ private:
 	SpMat _system;
 	Eigen::VectorXd _rhs;
 	Eigen::SparseLU<SpMat, Eigen::COLAMDOrdering<int>> _solver;
+
+	// Internal vectors for the Solve method
+	std::vector<double> _rhsUnfoldedC;
+	Eigen::VectorXd _RHS;
+	Eigen::VectorXd _solution;
+	std::vector<double> _solutionUnfolded;
+	std::vector<double> _solutionUnfoldedN;
 };
